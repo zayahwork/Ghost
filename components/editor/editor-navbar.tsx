@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Show, UserButton } from "@clerk/nextjs";
 
 import { Button } from "@/components/ui/button";
 
@@ -44,8 +45,11 @@ export function EditorNavbar({
         ) : null}
       </div>
 
-      {/* Right section — reserved for editor actions in a later unit. */}
-      <div className="flex flex-1 items-center justify-end gap-2" />
+      <div className="flex flex-1 items-center justify-end gap-2">
+        <Show when="signed-in">
+          <UserButton />
+        </Show>
+      </div>
     </header>
   );
 }

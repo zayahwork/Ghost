@@ -16,14 +16,14 @@ Requirements:
 
 Create 'components/editor/project-sidebar.tsx'.
 
-Requirments:
+Requirements:
 
 - sidebar should float above the editor
-- opening it hsould not push page content
+- opening it should not push page content
 - slides in from the left
 - accepts 'isOpen' prop
 - header with 'Projects' title + close button
-- shadecn 'Tabs':
+- shadcn 'Tabs':
   - My Projects
   - Shared
 - both tabs show empty placeholder state
@@ -43,6 +43,6 @@ Do not build actual dialogs yet.
 
 ### Check when done
 
-- new components compile without TypeScript erros
-- no lint erros
+- new components compile without TypeScript errors
+- no lint errors
 - dialog pattern is ready for future use
