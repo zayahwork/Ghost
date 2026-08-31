@@ -57,8 +57,23 @@ const result = await signUp.attemptVerification({
 Set the active session after successful sign-up:
 
 ```typescript
-await setActive({ session: signUp.createdSessionId })
+await setActive({
+  session: signUp.createdSessionId,
+  navigate: async ({ session }) => {
+    if (session?.currentTask) {
+      // The instance requires a session task (for example, org selection)
+      // before the user reaches the app. Send them to your task UI.
+      router.push(`/sign-up/tasks/${session.currentTask.key}`)
+      return
+    }
+    router.push('/')
+  },
+})
 ```
+
+`navigate` runs after the session is set. Skipping the `currentTask` check
+drops the user on `/` with an unresolved task, and Clerk keeps redirecting them
+back until it is handled.
 
 ### SSO (OAuth)
 
@@ -96,7 +111,7 @@ try {
 
 | Status | Meaning | What to do |
 |--------|---------|------------|
-| `complete` | Account created | `setActive({ session: createdSessionId })` |
+| `complete` | Account created | `setActive({ session: createdSessionId, navigate })` — see [Finalize](#4-finalize) |
 | `missing_requirements` | Verified, but required fields remain | Read `signUp.missingFields`, collect them, then `signUp.update({ ... })` |
 | `abandoned` | Attempt expired | Restart the flow |
 
@@ -170,8 +185,16 @@ export default function SignUpPage() {
       })
 
       if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId })
-        router.push('/')
+        await setActive({
+          session: result.createdSessionId,
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              router.push(`/sign-up/tasks/${session.currentTask.key}`)
+              return
+            }
+            router.push('/')
+          },
+        })
         return
       }
 
@@ -206,8 +229,16 @@ export default function SignUpPage() {
       })
 
       if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId })
-        router.push('/')
+        await setActive({
+          session: result.createdSessionId,
+          navigate: async ({ session }) => {
+            if (session?.currentTask) {
+              router.push(`/sign-up/tasks/${session.currentTask.key}`)
+              return
+            }
+            router.push('/')
+          },
+        })
         return
       }
 

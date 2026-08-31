@@ -34,7 +34,7 @@
 - Every project has a single owner (Clerk user ID).
 - Projects can include additional collaborators.
 - Only authenticated users can access protected routes.
-- Only the owner or a collaborator can mutate project resources.
+- Only the owner or a collaborator can mutate project resources. Rename and delete are owner-only today — `06-project-apis.md` specifies that, and collaborator mutation is not implemented yet.
 - Liveblocks room tokens are issued only after verifying project membership.
 
 ## Starter System Designs

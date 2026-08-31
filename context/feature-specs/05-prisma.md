@@ -18,7 +18,7 @@ Add 'ProjectCollaborator':
 
 - project relation with cascade delete
 - collaborator email
-- creation timestamo
+- creation timestamp
 - unique constraint on project/email
 - indexes on email and project/date
 
@@ -30,7 +30,7 @@ Create 'lib/prisma.ts' as a cached singleton.
 
 Branch by 'DATABASE_URL':
 
-- if it starts with 'prisam+postgress://', use Accelerate
+- if it starts with 'prisma+postgres://', use Accelerate
 - otherwise use direct '@prisma/adapter-pg'
 
 Cache the client on 'global' in development for hot reloads.

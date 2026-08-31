@@ -9,7 +9,7 @@ Reuse the existing editor layout. Do not modify the navbar or sidebar behavior.
 In the center of the page, add:
 
 - heading: 'Create a project or open an existing one'
-- descrptions: 'Start a new architecture workspace, or choose a project from the sidebar.'
+- description: 'Start a new architecture workspace, or choose a project from the sidebar.'
 - 'New Project' button with a 'Plus' icon
 
 Keep the layout minimal. Do not wrap this content in cards.
@@ -32,7 +32,7 @@ Clicking 'New Project' should open the Create Project dialog.
 
 ### Delete Projects
 
-- destructive comfirmation only
+- destructive confirmation only
 - no input
 - confirm button uses destructive styling
 
