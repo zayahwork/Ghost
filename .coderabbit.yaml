@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+# CodeRabbit auto-reviews only pull requests targeting the default branch
+# unless base_branches says otherwise. Work here flows feature -> development
+# -> main, so without this the per-feature review into development is skipped
+# and the only review that ever runs is the final one into main - after the
+# work has already landed on the integration branch.
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - development
+
+  # Fail the review when a PR that changes behaviour ships no tests. This
+  # project has no test runner at all yet, so expect this to speak up.
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
