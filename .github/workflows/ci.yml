@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  # Feature branches are covered by their pull request. Listing them here too
+  # would run every check twice for a single push.
+  push:
+    branches: [main, development]
+  pull_request:
+
+# Nothing here writes to the repository. zizmor flags the default token as
+# overly broad: a compromised dependency running under `npm ci` or `npm run
+# build` would otherwise inherit write scope.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      # `next build` imports lib/prisma.ts while collecting route config, which
+      # constructs a PrismaClient and throws if DATABASE_URL is unset. The pool
+      # is built but never connected to during a build, so a throwaway URL is
+      # enough and CI needs no database secret. Clerk needs no key here at all.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Postinstall and build scripts run in this workspace; there is no
+          # reason for them to find a push-capable credential lying in .git.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      # postinstall runs `prisma generate`, which the typecheck and the build
+      # both need - app/generated/prisma is gitignored, so it does not exist
+      # until this step has run.
+      - run: npm ci
+
+      - run: npx eslint .
+
+      # Next 16 generates the RouteContext and LayoutProps globals into
+      # .next/types, and tsconfig includes them. On a developer machine .next is
+      # already there from `next dev`, so tsc passes; a clean runner has no
+      # .next and every route handler and layout fails with TS2304. typegen
+      # writes those types without paying for a full build.
+      - run: npx next typegen
+
+      - run: npx tsc --noEmit
+
+      - run: npm run build

@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Phase 5 — Persistence: the Prisma data models, the client singleton, and the applied migrations
+- Phase 6 — Persistence, part two: the project REST API over `lib/prisma.ts`. Backend only.
 
 ## Current Goal
 
-- `05-prisma` is complete. The schema and client exist but nothing reads or writes them yet — next is the projects API that puts `lib/prisma.ts` behind real route handlers and replaces `MOCK_PROJECTS`.
+- `06-project-apis` is complete. List / create / rename / delete route handlers exist and are owner-enforced, but nothing calls them yet — the dialogs and sidebar still render `MOCK_PROJECTS`. Next is wiring the UI to these routes.
 
 ## Completed
 
@@ -68,20 +68,32 @@ Update this file whenever the current phase, active feature, or implementation s
   - `prisma/migrations/20260831150656_add_project_collaborator` — creates the `ProjectCollaborator` table, its three indexes, and the cascading foreign key. Applied to the live database.
   - No new dependencies were needed (see Architecture Decisions).
 
+- **06-project-apis** — the project REST API. Backend only; no UI is wired to it.
+  - `app/api/projects/route.ts` — `GET` lists the caller's own projects newest first (`where: { ownerId }`, `orderBy: { createdAt: "desc" }`); `POST` creates one and answers `201`.
+  - `app/api/projects/[projectId]/route.ts` — `PATCH` renames, `DELETE` deletes. Both owner-only. Typed with the Next 16 global `RouteContext<"/api/projects/[projectId]">`, matching the `LayoutProps<"/">` already used in `app/layout.tsx`.
+  - `lib/api-response.ts` — the one error body (`{ error: string }`), the `badRequest` / `unauthorized` / `forbidden` / `notFound` constructors, and the `Guard<T>` type the handlers branch on.
+  - `lib/project-access.ts` — `requireUserId()` (Clerk `auth()` → `401`) and `requireOwnedProject()` (`404` when absent, `403` when owned by someone else).
+  - `lib/project-input.ts` — body parsing for create and rename. `DEFAULT_PROJECT_NAME` is `"Untitled Project"`; names are trimmed and capped at 120 characters.
+  - `lib/project-response.ts` — `ProjectResponse` plus `toProjectResponse()`, the explicit wire shape with ISO-string timestamps.
+  - `proxy.ts` — API routes now answer `401` instead of Clerk's default `404` for unauthenticated non-document requests (see Architecture Decisions). Page routes are untouched.
+  - No new dependencies, no schema change, no migration. `id` is left to the schema's `@default(cuid())`.
+
 ## In Progress
 
 - None.
 
 ## Next Up
 
-- The projects API — route handlers over `lib/prisma.ts` that replace `MOCK_PROJECTS` and make the dialogs persist.
+- Wiring the UI to the projects API — `useProjectDialogs()` and the sidebar still read `MOCK_PROJECTS`; `lib/mock-projects.ts` goes away when they call the routes.
 - The canvas surface, which replaces the `app/editor/page.tsx` placeholder.
 
 ## Open Questions
 
 - The navbar center section has no defined content. It currently renders an optional `title` string; the real content (project name, breadcrumb, presence) is undefined in the context files.
 - Selecting a project has no defined behavior. Sidebar rows render name, slug, and owner actions but are not clickable — the spec defines only the create / rename / delete wiring, and the project workspace route does not exist yet.
-- Dialog confirm actions have no effect beyond closing the dialog. `04-project.dialoges.md` scopes this unit to mock data with no persistence, so `MOCK_PROJECTS` is never mutated by a create, rename, or delete.
+- Dialog confirm actions have no effect beyond closing the dialog. `04-project.dialoges.md` scopes that unit to mock data, and `06-project-apis.md` explicitly keeps the API backend-only, so the routes exist but nothing calls them.
+- Collaborator access to projects is unimplemented. `architecture-context.md` says "only the owner **or a collaborator** can mutate project resources", but `06-project-apis.md` specifies owner-only for rename and delete and says nothing about listing shared projects. `GET /api/projects` therefore returns owned projects only, and the sidebar's "Shared" tab has no route behind it. Resolve which rule wins before the UI is wired.
+- There is no route for reading a single project (`GET /api/projects/[projectId]`). The spec lists four endpoints and that is not one of them; add it when a project workspace route needs it.
 
 ## Architecture Decisions
 
@@ -95,7 +107,13 @@ Update this file whenever the current phase, active feature, or implementation s
 - Both chrome components are `"use client"`: they own click handlers and, in the sidebar's case, the Radix `Tabs` state. They take open/close state as props rather than owning it; `EditorShell` is the single source of truth for sidebar state.
 - Sidebar state lives in `EditorShell`, not in `app/editor/layout.tsx`. A route layout is a server component and cannot hold `useState`, so the client boundary is pushed down into one shell component — satisfying invariant 4 (client components only where interactivity requires them) while keeping the layout server-rendered.
 - `/editor` is a placeholder route with no project scoping. The real workspace path (likely project-scoped) is undefined in the context files and belongs to a later unit.
-- Auth is deny-by-default: `proxy.ts` calls `auth.protect()` on every route that is not the sign-in or sign-up path, so new routes are protected the moment they are added rather than needing to opt in.
+- Auth is deny-by-default: `proxy.ts` rejects every route that is not the sign-in or sign-up path, so new routes are protected the moment they are added rather than needing to opt in. Page routes get `auth.protect()`; API routes get an explicit `401`.
+- **API routes answer `401`, not Clerk's `404`.** `auth.protect()` calls `notFound()` for any request that is not a document or a server action (`protect.js` in `@clerk/nextjs`), so an unauthenticated `fetch` to `/api/projects` would have returned `404` — which `06-project-apis.md` requires to be `401`. `proxy.ts` branches on an `/api/:path*` matcher and returns `unauthorized()` from `lib/api-response.ts` instead. The handlers still call `requireUserId()` themselves: they need the user ID regardless, and the guard should not depend on the proxy matcher staying correct.
+- **A missing project is `404`, a project owned by someone else is `403`.** They are not collapsed into a single `404`. The caller is authenticated in both cases, and a collaborator who cannot rename a project they can see needs to be able to tell "not yours" from "gone".
+- Access checks return a `Guard<T>` — `{ ok: true, value }` or `{ ok: false, response }` — rather than throwing. The failure path stays visible in the handler (`if (!user.ok) return user.response`) and the type system will not let a handler read past a check it did not make.
+- A blank project name means "the user did not choose" and is answered with `"Untitled Project"`, the same as an omitted one. A blank name on **rename** is a `400`: there it is the caller failing to say what the new name is. A name of the wrong *type* is a `400` in both cases — that is a malformed request, not an omitted field.
+- `ProjectResponse` is declared by hand instead of re-exporting the Prisma model, so the response contract cannot silently widen when a column is added, and timestamps are typed as the ISO strings a client actually receives rather than `Date`.
+- `DELETE` returns the deleted record rather than `204`, so a client can restore its own list state without a refetch. Collaborator rows go with it through the database-level cascade, not through application code.
 - Public routes are derived from `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `NEXT_PUBLIC_CLERK_SIGN_UP_URL` (with `/sign-in` and `/sign-up` fallbacks) so the proxy matcher and Clerk's own redirect targets cannot drift apart.
 - `/` is a protected route rather than a public landing page. Unauthenticated visitors are bounced to sign-in by the proxy before the page runs; the page itself only handles the signed-in case, redirecting to `/editor`.
 - Clerk appearance is configured once on `ClerkProvider` and inherited by every Clerk component, so `SignIn`, `SignUp`, and `UserButton` are themed without touching Clerk internals.
@@ -170,3 +188,6 @@ Update this file whenever the current phase, active feature, or implementation s
 - Both `lib/prisma.ts` branches were constructed for real, not just typechecked — a fake `prisma+postgres://` URL and a `postgres://` URL each produced a working client with the models attached, so the Accelerate path is live code rather than an unreachable type-level branch. It has not been exercised against an actual Accelerate endpoint; `DATABASE_URL` here is a direct `postgres://` string, so the `@prisma/adapter-pg` branch is what runs today.
 - `prisma migrate dev` again did not regenerate the client (same folder-schema behaviour noted under `04`/Prisma above) — `prisma generate` was run explicitly after the migration. Treat this as the standing routine, not a one-off.
 - `pg` prints an SSL deprecation warning on connect ("'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'"). It comes from the `sslmode` in the Prisma Postgres `DATABASE_URL` and is informational on `pg` 8 — but `pg` 9 / `pg-connection-string` 3 will change the semantics, so the URL will need an explicit `sslmode=verify-full` before that upgrade.
+
+- `06-project-apis` verification: `tsc --noEmit` clean; `eslint .` reports 0 errors and 0 warnings; `npm run build` passes with `ƒ /api/projects` and `ƒ /api/projects/[projectId]` in the route table and `ƒ Proxy (Middleware)` intact. Against `next start` with no session, all four endpoints return `401 {"error":"Authentication required."}` — before the proxy change this path produced Clerk's `404`. Ownership and parsing were exercised directly against the live database: a non-owner gets `403`, an unknown id gets `404`, the owner's own project resolves, the list query returns only the owner's rows, a created project's id is a cuid (`cmthfccnb000020vd277vmr9h`), an absent / empty / whitespace name all become `"Untitled Project"`, `" A "` trims to `"A"`, and a numeric name, malformed JSON, a top-level array, a missing rename name, and a blank rename name each return the expected `400`. Test rows were deleted; both tables left at 0.
+- The authenticated happy path has **not** been exercised end to end through HTTP — that needs a real Clerk session token, and there is no test runner in the repo. What HTTP confirmed is the unauthenticated `401` on every route; the owner, non-owner, and validation branches were confirmed by calling the `lib/` guards directly with the arguments the handlers pass them. Worth one signed-in `curl` or browser pass before the UI is wired on top.
