@@ -4,14 +4,15 @@
     {
       "id": 1,
       "prompt": "i need to get all users who signed up in the last 7 days from clerk's backend API. show me how",
-      "expected_output": "REST API call to GET /v1/users with date filter, Bearer token auth using CLERK_SECRET_KEY, response parsing and pagination handling",
+      "expected_output": "REST API call to GET /v1/users using the created_at_after filter (Unix timestamp in milliseconds) to scope to the last 7 days, Bearer token auth using CLERK_SECRET_KEY, parsing of the array response, and pagination handling",
       "scaffold": "nextjs-basic-auth",
       "files": [],
       "expectations": [
         "Uses GET /v1/users endpoint",
-        "Includes a created_at or date-based filter query parameter to narrow to last 7 days",
+        "Narrows to the last 7 days with the created_at_after query parameter (not a created_at=gt: range)",
+        "Passes the cutoff as a Unix timestamp in milliseconds, not seconds",
         "Sets CLERK_SECRET_KEY as Bearer token in the Authorization header",
-        "Parses the JSON response array of user objects",
+        "Parses the JSON response as an array of user objects",
         "Handles or mentions pagination via limit and offset parameters"
       ]
     },
@@ -32,13 +33,14 @@
     {
       "id": 3,
       "prompt": "i need to set custom metadata on a user via clerk's backend api. set their plan to 'pro' and onboarded to true",
-      "expected_output": "PATCH /v1/users/{user_id} with public_metadata or private_metadata body, explanation of metadata types and when to use each",
+      "expected_output": "PATCH /v1/users/{user_id}/metadata (the dedicated metadata endpoint, which deep-merges) with a public_metadata or private_metadata body, explanation of metadata types and when to use each",
       "scaffold": "nextjs-basic-auth",
       "files": [],
       "expectations": [
-        "Uses PATCH /v1/users/{user_id} endpoint",
+        "Uses the dedicated metadata endpoint PATCH /v1/users/{user_id}/metadata, not PATCH /v1/users/{user_id}",
         "Sets the metadata in the correct field: public_metadata, private_metadata, or unsafe_metadata",
         "Explains the difference between metadata types (client-readable vs server-only vs client-writable)",
+        "States that this endpoint deep-merges into existing metadata rather than replacing it",
         "Includes a properly formed JSON body with the plan and onboarded fields",
         "Mentions checking write permissions before executing the update"
       ]
@@ -60,14 +62,14 @@
     {
       "id": 5,
       "prompt": "i'm updating user metadata to add a 'plan' field but it keeps deleting the existing 'role' field. what am i doing wrong?",
-      "expected_output": "Metadata updates overwrite not merge. Read existing metadata first, spread it, then write back.",
+      "expected_output": "Setting metadata via updateUser() / PATCH /v1/users/{user_id} is deprecated: before API version 2026-05-12 it replaces instead of merging, and from 2026-05-12 onward the metadata fields are rejected on that endpoint. Use updateUserMetadata() (PATCH /v1/users/{user_id}/metadata), which deep-merges, or replaceUserMetadata() (PUT /v1/users/{user_id}/metadata) for a full replacement.",
       "scaffold": "nextjs-basic-auth",
       "expectations": [
-        "Explains that updateUser publicMetadata replaces all existing metadata, not merges",
-        "Shows reading the existing user first with getUser(userId)",
-        "Spreads existing metadata before adding new fields ({ ...user.publicMetadata, plan: 'pro' })",
-        "Calls updateUser with the merged metadata object",
-        "Warns that this applies to publicMetadata, privateMetadata, and unsafeMetadata equally"
+        "Explains that on API versions before 2026-05-12, setting publicMetadata via updateUser replaces all existing metadata rather than merging",
+        "Notes that updating metadata through updateUser() is deprecated, and that from API version 2026-05-12 onward the metadata fields are rejected on PATCH /v1/users/{user_id}",
+        "Recommends updateUserMetadata() (PATCH /v1/users/{user_id}/metadata), which deep-merges the provided fields",
+        "Shows adding the plan field without a read-then-spread step, leaving the existing role field intact",
+        "Mentions replaceUserMetadata() (PUT /v1/users/{user_id}/metadata) as the option when full replacement is intended"
       ]
     },
     {

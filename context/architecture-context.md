@@ -7,7 +7,7 @@
 | Framework        | Next.js 16 + TypeScript | Full-stack app with server/client boundaries                   |
 | UI               | Tailwind + shadcn/ui    | Component composition and styling                              |
 | Auth             | Clerk                   | User identity and route protection                             |
-| Database         | Prisma + PostgreSQL     | Relational metadata: projects, collaborators, specs, task runs |
+| Database         | Prisma 7 + PostgreSQL   | Relational metadata: projects, collaborators, specs, task runs |
 | Canvas           | Liveblocks + React Flow | Real-time collaborative canvas, presence, and cursors          |
 | Background tasks | Trigger.dev             | Durable AI generation workflows                                |
 | Artifact storage | Vercel Blob             | Canvas snapshots and generated Markdown specs                  |
@@ -16,9 +16,9 @@
 
 - `app/api` — Authenticated request handlers: input validation, ownership checks, task triggering, and persistence.
 - `trigger` — Long-running background jobs: AI design generation and spec generation.
-- `lib` — Shared infrastructure: Prisma client, access control helpers, and utilities.
+- `lib` — Shared infrastructure: Prisma client singleton, access control helpers, and utilities.
 - `components` — UI composition: canvas surfaces, sidebars, dialogs, and interactive elements.
-- `prisma` — Database schema and generated client output.
+- `prisma` — Schema folder: `schema.prisma` holds the generator and datasource, `models/*.prisma` holds one aggregate per file (a root model plus the enums and child records that only exist through it), `migrations/` holds applied migrations. The generated client is written to `app/generated/prisma` and is gitignored.
 - `data` — Legacy local directory. Not used for new artifacts.
 
 ## Storage Model

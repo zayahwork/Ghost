@@ -37,10 +37,13 @@ export async function DELETE(req: Request) {
 ## Org Route Protection
 
 ```typescript
-export async function GET(req: Request, { params }: { params: { orgId: string } }) {
+export async function GET(req: Request, { params }: { params: Promise<{ orgId: string }> }) {
   const { userId, orgId } = await auth();
   if (!userId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  if (orgId !== params.orgId) return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+  // Route params are a Promise — await before reading. Aliased to avoid shadowing auth()'s orgId.
+  const { orgId: routeOrgId } = await params;
+  if (orgId !== routeOrgId) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
   const orgData = await db.orgs.findUnique({ where: { id: orgId } });
   return Response.json(orgData);
