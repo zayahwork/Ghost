@@ -7,6 +7,12 @@ on:
     branches: [main, development]
   pull_request:
 
+# Nothing here writes to the repository. zizmor flags the default token as
+# overly broad: a compromised dependency running under `npm ci` or `npm run
+# build` would otherwise inherit write scope.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -24,6 +30,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Postinstall and build scripts run in this workspace; there is no
+          # reason for them to find a push-capable credential lying in .git.
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:

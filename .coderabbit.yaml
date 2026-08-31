@@ -11,8 +11,6 @@ reviews:
     base_branches:
       - development
 
-  # Fail the review when a PR that changes behaviour ships no tests. This
-  # project has no test runner at all yet, so expect this to speak up.
   profile: chill
   request_changes_workflow: false
   high_level_summary: true
