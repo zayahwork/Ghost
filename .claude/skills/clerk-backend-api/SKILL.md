@@ -93,7 +93,7 @@ const invitation = await clerkClient.organizations.createOrganizationInvitation(
 
 **For `plan: 'pro'` and `onboarded: true` — use `public_metadata`** (frontend-readable, server-writable).
 
-Always use the dedicated metadata endpoint `PATCH /v1/users/{user_id}/metadata` — it **deep-merges** into existing metadata. Setting metadata through `PATCH /v1/users/{user_id}` is deprecated and replaces the whole object.
+Always use the dedicated metadata endpoint `PATCH /v1/users/{user_id}/metadata` — it **deep-merges** into existing metadata. Setting metadata through `PATCH /v1/users/{user_id}` is deprecated: on API versions before `2026-05-12` it is accepted but replaces the whole object, and from API version `2026-05-12` onward those fields are rejected by that endpoint.
 
 ```bash
 curl -s -X PATCH "https://api.clerk.com/v1/users/${USER_ID}/metadata" \
@@ -110,7 +110,8 @@ import { clerkClient } from '@clerk/nextjs/server'
 // OR: import { createClerkClient } from '@clerk/backend'
 
 // updateUserMetadata() deep-merges — existing keys are preserved.
-// Do NOT pass metadata to updateUser(); that path is deprecated and replaces the whole object.
+// Do NOT pass metadata to updateUser(); that path is deprecated — it replaces the whole
+// object on API versions before 2026-05-12, and is rejected from 2026-05-12 onward.
 await clerkClient.users.updateUserMetadata(userId, {
   publicMetadata: { plan: 'pro', onboarded: true },   // readable by client, writable server-only
   // privateMetadata: { stripeId: 'cus_xxx' },         // server-only read AND write
@@ -180,7 +181,7 @@ Returns: User object
 PATCH /v1/users/{user_id}
 Body (JSON, snake_case): { first_name, last_name, username, ... }
 ```
-Metadata fields on this endpoint are **deprecated** — use the metadata endpoints below instead.
+Metadata fields on this endpoint are **deprecated** — accepted (as a full replacement) on API versions before `2026-05-12`, rejected from `2026-05-12` onward. Use the metadata endpoints below instead.
 
 **Update user metadata — deep merge**
 ```
@@ -303,7 +304,7 @@ Use the output to determine the latest version and available tags.
 
 ### Metadata: Merge vs. Replace
 
-Setting metadata through `updateUser()` / `PATCH /v1/users/{user_id}` is **deprecated** and REPLACES the whole metadata object rather than merging. Use the dedicated metadata endpoint instead.
+Setting metadata through `updateUser()` / `PATCH /v1/users/{user_id}` is **deprecated** on every current API version. On versions before `2026-05-12` the fields are still accepted but REPLACE the whole metadata object rather than merging; from API version `2026-05-12` onward `public_metadata`, `private_metadata`, and `unsafe_metadata` are no longer accepted on that endpoint at all. Use the dedicated metadata endpoints instead — `updateUserMetadata()` for deep merges, `replaceUserMetadata()` for full replacements.
 
 To add a field without losing existing data, use `updateUserMetadata()` (`PATCH /v1/users/{user_id}/metadata`) — it deep-merges, so no read-then-spread is needed:
 ```typescript
@@ -317,7 +318,7 @@ await clerkClient.users.replaceUserMetadata(userId, { publicMetadata: { newField
 ```
 This drops every other `publicMetadata` field. Top-level fields you omit (`privateMetadata`, `unsafeMetadata`) keep their stored values; pass `{}` to clear one.
 
-Avoid — deprecated, and silently deletes all other `publicMetadata` fields:
+Avoid — deprecated on every current API version; it silently deletes all other `publicMetadata` fields before `2026-05-12`, and is rejected from `2026-05-12` onward:
 ```typescript
 await clerkClient.users.updateUser(userId, { publicMetadata: { newField: 'value' } })
 ```

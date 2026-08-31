@@ -36,6 +36,12 @@ _load_env_file() {
     _key="${_line%%=*}"
     [[ "$_key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
     [[ " $_ALLOWED_ENV_KEYS " == *" $_key "* ]] || continue
+    # The caller's own environment wins: a discovered .env may only fill in a
+    # value that is unset or empty, never override one already supplied.
+    [[ -n "${!_key:-}" ]] && continue
+    # The caller's own environment wins: a discovered .env may only fill in a
+    # value that is unset or empty, never override one already supplied.
+    [[ -n "${!_key:-}" ]] && continue
     _val="${_line#*=}"
     _val="${_val%"${_val##*[![:space:]]}"}"    # trim trailing whitespace
     # Strip one layer of matching surrounding quotes. The value is then assigned

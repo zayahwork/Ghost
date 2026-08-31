@@ -104,7 +104,23 @@ Handle all three. Branching only on `complete` strands the user on the
 verification step with no feedback when the instance requires extra fields
 (for example first/last name enabled in **User & Authentication**).
 
+The example below collects `first_name` and `last_name` only. Any other entry
+`missingFields` can report (`username`, `phone_number`, `legal_accepted`, custom
+attributes) needs its own input and its own handling — see the scope note under
+the example. Ignoring an entry leaves the sign-up stuck on
+`missing_requirements`, so surface anything you do not handle instead of
+dropping it.
+
 ## Complete Example: Email/Password with Email Verification
+
+Scope: the completion form below covers instances whose only extra required
+fields are first and last name. If your instance requires anything else
+(username, phone number, custom attributes), add the matching inputs and pass
+them to `signUp.update()` — `missingFields` reports snake_case keys, while
+`update()` takes camelCase props. `phone_number` needs more than an update: after
+`signUp.update({ phoneNumber })`, run `prepareVerification({ strategy:
+'phone_code' })` and `attemptVerification({ strategy: 'phone_code', code })`
+before the sign-up can complete.
 
 ```tsx
 'use client'
@@ -182,7 +198,8 @@ export default function SignUpPage() {
     setError('')
 
     try {
-      // Only send what Clerk actually asked for.
+      // Only send what Clerk actually asked for. This form handles first/last
+      // name only — extend both branches for any other required field.
       const result = await signUp.update({
         ...(missingFields.includes('first_name') && { firstName }),
         ...(missingFields.includes('last_name') && { lastName }),

@@ -62,11 +62,11 @@
     {
       "id": 5,
       "prompt": "i'm updating user metadata to add a 'plan' field but it keeps deleting the existing 'role' field. what am i doing wrong?",
-      "expected_output": "Setting metadata via updateUser() / PATCH /v1/users/{user_id} replaces instead of merging and is deprecated. Use updateUserMetadata() (PATCH /v1/users/{user_id}/metadata), which deep-merges.",
+      "expected_output": "Setting metadata via updateUser() / PATCH /v1/users/{user_id} is deprecated: before API version 2026-05-12 it replaces instead of merging, and from 2026-05-12 onward the metadata fields are rejected on that endpoint. Use updateUserMetadata() (PATCH /v1/users/{user_id}/metadata), which deep-merges, or replaceUserMetadata() (PUT /v1/users/{user_id}/metadata) for a full replacement.",
       "scaffold": "nextjs-basic-auth",
       "expectations": [
-        "Explains that setting publicMetadata via updateUser replaces all existing metadata, not merges",
-        "Notes that updating metadata through updateUser() is deprecated",
+        "Explains that on API versions before 2026-05-12, setting publicMetadata via updateUser replaces all existing metadata rather than merging",
+        "Notes that updating metadata through updateUser() is deprecated, and that from API version 2026-05-12 onward the metadata fields are rejected on PATCH /v1/users/{user_id}",
         "Recommends updateUserMetadata() (PATCH /v1/users/{user_id}/metadata), which deep-merges the provided fields",
         "Shows adding the plan field without a read-then-spread step, leaving the existing role field intact",
         "Mentions replaceUserMetadata() (PUT /v1/users/{user_id}/metadata) as the option when full replacement is intended"

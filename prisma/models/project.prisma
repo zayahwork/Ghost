@@ -1,0 +1,39 @@
+/// A user-created system design. Owned by exactly one Clerk user; canvas content
+/// itself lives in blob storage, and only its reference is held here.
+model Project {
+  id             String        @id @default(cuid())
+  /// Clerk user ID of the owner. Not a foreign key — identity lives in Clerk.
+  ownerId        String
+  name           String
+  description    String?
+  status         ProjectStatus @default(DRAFT)
+  /// Blob URL of the canvas snapshot at `canvas/{projectId}.json`. Null until first save.
+  canvasJsonPath String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  collaborators ProjectCollaborator[]
+
+  @@index([ownerId])
+  @@index([createdAt])
+}
+
+enum ProjectStatus {
+  DRAFT
+  ARCHIVED
+}
+
+/// Someone other than the owner who may access a project. Invited by email
+/// rather than by Clerk user ID, so an invite can precede the account.
+model ProjectCollaborator {
+  id        String   @id @default(cuid())
+  projectId String
+  email     String
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, email])
+  @@index([email])
+  @@index([projectId, createdAt])
+}
