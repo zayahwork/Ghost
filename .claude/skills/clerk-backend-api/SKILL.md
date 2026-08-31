@@ -91,10 +91,12 @@ const invitation = await clerkClient.organizations.createOrganizationInvitation(
 | Private | `private_metadata` | **Server only** | **Server only** | Stripe IDs, compliance flags, internal identifiers |
 | Unsafe | `unsafe_metadata` | Client + Server | Client + Server | Ephemeral UI state, onboarding steps (client-writable — avoid sensitive data) |
 
-**For `plan: 'pro'` and `onboarded: true` — use `public_metadata`** (frontend-readable, server-writable):
+**For `plan: 'pro'` and `onboarded: true` — use `public_metadata`** (frontend-readable, server-writable).
+
+Always use the dedicated metadata endpoint `PATCH /v1/users/{user_id}/metadata` — it **deep-merges** into existing metadata. Setting metadata through `PATCH /v1/users/{user_id}` is deprecated and replaces the whole object.
 
 ```bash
-curl -s -X PATCH "https://api.clerk.com/v1/users/${USER_ID}" \
+curl -s -X PATCH "https://api.clerk.com/v1/users/${USER_ID}/metadata" \
   -H "Authorization: Bearer $CLERK_SECRET_KEY" \
   -H "Content-Type: application/json" \
   -d '{"public_metadata": {"plan": "pro", "onboarded": true}}' \
@@ -107,19 +109,23 @@ curl -s -X PATCH "https://api.clerk.com/v1/users/${USER_ID}" \
 import { clerkClient } from '@clerk/nextjs/server'
 // OR: import { createClerkClient } from '@clerk/backend'
 
-await clerkClient.users.updateUser(userId, {
+// updateUserMetadata() deep-merges — existing keys are preserved.
+// Do NOT pass metadata to updateUser(); that path is deprecated and replaces the whole object.
+await clerkClient.users.updateUserMetadata(userId, {
   publicMetadata: { plan: 'pro', onboarded: true },   // readable by client, writable server-only
   // privateMetadata: { stripeId: 'cus_xxx' },         // server-only read AND write
   // unsafeMetadata: { step: 'welcome' },              // client-writable, avoid sensitive data
 })
 ```
 
+To overwrite metadata wholesale instead of merging, use `replaceUserMetadata()` (`PUT /v1/users/{user_id}/metadata`).
+
 **Note:** REST API uses `snake_case` (`public_metadata`). SDK uses `camelCase` (`publicMetadata`).
 
 ### List users (last 7 days)
 
 ```bash
-curl -s "https://api.clerk.com/v1/users?limit=100&offset=0&order_by=-created_at&created_at=gt:$(date -d '7 days ago' +%s 2>/dev/null || date -v-7d +%s)000" \
+curl -s "https://api.clerk.com/v1/users?limit=100&offset=0&order_by=-created_at&created_at_after=$(date -d '7 days ago' +%s 2>/dev/null || date -v-7d +%s)000" \
   -H "Authorization: Bearer $CLERK_SECRET_KEY" \
   | python3 -c "
 import sys, json
@@ -154,8 +160,13 @@ Auth: `Authorization: Bearer $CLERK_SECRET_KEY` on every request.
 **List users**
 ```
 GET /v1/users
-Query params: limit (max 500, default 10), offset, order_by (+/-created_at, +/-updated_at, +/-email_address, +/-web3wallet, +/-first_name, +/-last_name, +/-phone_number, +/-username, +/-last_active_at, +/-last_sign_in_at), email_address[], phone_number[], username[], web3wallet[], user_id[], query, created_at (ISO 8601 range: gt:TIMESTAMP or lt:TIMESTAMP in Unix ms)
-Returns: array of User objects
+Query params: limit (max 500, default 10), offset, order_by (+/-created_at, +/-updated_at, +/-email_address, +/-web3wallet, +/-first_name, +/-last_name, +/-phone_number, +/-username, +/-last_active_at, +/-last_sign_in_at), email_address[], phone_number[], username[], web3wallet[], user_id[], external_id[], organization_id[], query
+Date filters (all Unix timestamps in MILLISECONDS, not seconds):
+  created_at_after, created_at_before
+  last_active_at_after, last_active_at_before
+  last_sign_in_at_after, last_sign_in_at_before
+There is no created_at=gt:/lt: range syntax — use the *_after / *_before params above.
+Returns: array of User objects (the total count is a separate call: GET /v1/users/count)
 ```
 
 **Get user**
@@ -167,7 +178,24 @@ Returns: User object
 **Update user**
 ```
 PATCH /v1/users/{user_id}
-Body (JSON, snake_case): { public_metadata, private_metadata, unsafe_metadata, first_name, last_name, username, ... }
+Body (JSON, snake_case): { first_name, last_name, username, ... }
+```
+Metadata fields on this endpoint are **deprecated** — use the metadata endpoints below instead.
+
+**Update user metadata — deep merge**
+```
+PATCH /v1/users/{user_id}/metadata
+Body (JSON, snake_case): { public_metadata?, private_metadata?, unsafe_metadata? }
+Merges into existing metadata at every nesting level. Set a key to null to remove it.
+Returns: updated User object
+```
+
+**Replace user metadata — full overwrite**
+```
+PUT /v1/users/{user_id}/metadata
+Body (JSON, snake_case): { public_metadata?, private_metadata?, unsafe_metadata? }
+Omitted top-level fields keep their stored value; a provided field is overwritten in full ({} clears it).
+Returns: updated User object
 ```
 
 **Delete user — IRREVERSIBLE**
@@ -273,22 +301,25 @@ Use the output to determine the latest version and available tags.
 
 `currentUser()` makes a real API call that counts against rate limits. Use `auth()` for just the session claims — it reads from the token without an API call.
 
-### Metadata Overwrites (Not Merges)
+### Metadata: Merge vs. Replace
 
-`updateUser({ publicMetadata: { role: 'admin' } })` REPLACES all public metadata, not merges. To add a field without losing existing data: read first, spread, then write.
+Setting metadata through `updateUser()` / `PATCH /v1/users/{user_id}` is **deprecated** and REPLACES the whole metadata object rather than merging. Use the dedicated metadata endpoint instead.
 
-Wrong:
+To add a field without losing existing data, use `updateUserMetadata()` (`PATCH /v1/users/{user_id}/metadata`) — it deep-merges, so no read-then-spread is needed:
+```typescript
+await clerkClient.users.updateUserMetadata(userId, { publicMetadata: { newField: 'value' } })
+```
+Other `publicMetadata` fields are preserved. Nested objects merge too; set a key to `null` to remove it.
+
+To overwrite wholesale, use `replaceUserMetadata()` (`PUT /v1/users/{user_id}/metadata`):
+```typescript
+await clerkClient.users.replaceUserMetadata(userId, { publicMetadata: { newField: 'value' } })
+```
+This drops every other `publicMetadata` field. Top-level fields you omit (`privateMetadata`, `unsafeMetadata`) keep their stored values; pass `{}` to clear one.
+
+Avoid — deprecated, and silently deletes all other `publicMetadata` fields:
 ```typescript
 await clerkClient.users.updateUser(userId, { publicMetadata: { newField: 'value' } })
-```
-This DELETES all other `publicMetadata` fields.
-
-Right:
-```typescript
-const user = await clerkClient.users.getUser(userId)
-await clerkClient.users.updateUser(userId, {
-  publicMetadata: { ...user.publicMetadata, newField: 'value' },
-})
 ```
 
 ---

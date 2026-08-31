@@ -4,11 +4,11 @@ Update this file whenever the current phase, active feature, or implementation s
 
 ## Current Phase
 
-- Phase 3 — Authentication: Clerk provider, auth pages, route protection, and user menu
+- Phase 4 — Project dialogs: the `/editor` home screen, create / rename / delete dialogs, and sidebar project actions
 
 ## Current Goal
 
-- `03-auth` is complete. Next goal is the following feature unit, to be defined in `context/feature-specs/`.
+- `04-project-dialogs` is complete. Next goal is the canvas surface, which replaces the `EditorHome` empty state once a project is open.
 
 ## Completed
 
@@ -45,6 +45,20 @@ Update this file whenever the current phase, active feature, or implementation s
     - `components/auth/redirect-signed-in.tsx` — `<Show when="signed-in">` wrapping a `router.replace()` effect, rendered by the auth layout. Bounces a signed-in visitor who navigates back to `/sign-in` instead of showing them the empty form area Clerk renders when a session is already active.
     - `<Show when="signed-in">` also wraps `UserButton` in the navbar so the right section stays empty until a session exists rather than flashing a placeholder.
 
+- **04-project-dialogs** — editor home screen, project dialogs, and sidebar project actions. Mock data only; no API calls or persistence.
+  - `types/project.ts` — `Project` (`id`, `name`, `slug`, `role`) and `ProjectRole` (`owner` | `collaborator`). `role` is what gates the sidebar item actions.
+  - `lib/mock-projects.ts` — `MOCK_PROJECTS`: three owned, two collaborator projects. The only project data in the app until the projects API exists.
+  - `lib/slug.ts` — `slugify()`: NFKD-normalize, strip combining marks, lowercase, collapse every non-alphanumeric run to `-`, trim leading/trailing `-`. Drives the live slug preview.
+  - `hooks/use-project-dialogs.ts` — the dedicated hook the spec asks for. Owns dialog state (`openDialog`, `targetProject`), form state (`name`), and loading state (`isSubmitting`), plus `openCreate` / `openRename` / `openDelete` / `close` / `submit`. Returns one `useMemo`'d object so it can be passed through context without re-rendering consumers on every shell render.
+  - `components/editor/create-project-dialog.tsx` — name input plus a live `slugify(name)` preview that updates on every keystroke, falling back to `your-project` while the field is empty. Submit is disabled on a blank name.
+  - `components/editor/rename-project-dialog.tsx` — input prefilled with the current name and `autoFocus`ed; the description carries the current name (`Currently named "…"`). Save is disabled while the name is blank or unchanged.
+  - `components/editor/delete-project-dialog.tsx` — confirmation only, no fields; the confirm button is `variant="destructive"`.
+  - `components/editor/project-dialogs-context.tsx` — `ProjectDialogsProvider` + `useProjectDialogsContext()`, so route content inside the shell can open a dialog.
+  - `components/editor/editor-home.tsx` — heading, description, and a `Plus` + `New Project` button wired to `openCreate`. Centered, uncarded, rendered by `app/editor/page.tsx` (still a server component).
+  - `project-sidebar.tsx` — now takes `projects` and renders them split by `role` across the existing `My Projects` / `Shared` tabs, each row showing name over slug. Owner rows carry `Pencil` / `Trash2` icon buttons; collaborator rows carry none. The empty states are kept for when a tab has no projects.
+  - Mobile scrim: a full-screen `md:hidden` `<button>` behind the panel (`z-30` under the sidebar's `z-40`) that closes it on tap.
+  - `editor-shell.tsx` — calls `useProjectDialogs()`, passes the three openers to the sidebar, provides the state to `children`, and renders the three dialogs.
+
 ## In Progress
 
 - None.
@@ -56,7 +70,8 @@ Update this file whenever the current phase, active feature, or implementation s
 ## Open Questions
 
 - The navbar center section has no defined content. It currently renders an optional `title` string; the real content (project name, breadcrumb, presence) is undefined in the context files.
-- `New Project` has no defined behavior yet. `ProjectSidebar` exposes an optional `onNewProject` callback and does nothing by default, per "do not build actual dialogs yet".
+- Selecting a project has no defined behavior. Sidebar rows render name, slug, and owner actions but are not clickable — the spec defines only the create / rename / delete wiring, and the project workspace route does not exist yet.
+- Dialog confirm actions have no effect beyond closing the dialog. `04-project.dialoges.md` scopes this unit to mock data with no persistence, so `MOCK_PROJECTS` is never mutated by a create, rename, or delete.
 
 ## Architecture Decisions
 
@@ -91,6 +106,14 @@ Update this file whenever the current phase, active feature, or implementation s
 - Bubble count is derived from panel area (one per ~34000 css px², clamped 6–22) and recomputed by a `ResizeObserver`, which also re-scales the backing store to `devicePixelRatio`. Density therefore stays constant across window sizes rather than thinning out on wide screens.
 - The `Ghost` lucide icon was dropped from the auth panel and the wordmark reads `Blueprint`, set in plain `text-copy-primary` — the token that renders as the theme's white (`#f0f0f4`); `text-white` would have been a raw Tailwind color, which `code-standards.md` forbids.
 
+- Project dialog state lives in one hook (`useProjectDialogs`) rather than in each dialog. Three dialogs act on the same two things — a target project and a name field — and only one can be open at a time, so a single `openDialog` discriminator plus a shared `name` is the honest model. It also means the dialogs are presentational: they receive `open`, values, and callbacks, and hold no state of their own.
+- `EditorShell` owns that hook and hands it to route content through `ProjectDialogsProvider`, because `app/editor/layout.tsx` is a server component and cannot pass a callback down to `children`. Context is the only path from the shell's state to a page rendered inside it.
+- `submit(action?)` takes an optional async action instead of being a bare close. There is nothing to await while the data is mocked, but this is the single place the projects API attaches later, and it is what makes `isSubmitting` a real flag rather than decoration.
+- Dialog forms live in the `EditorDialog` body while their submit buttons live in the footer, associated by `form={FORM_ID}`. `EditorDialog` renders `children` and `footer` as siblings, so this is what gives both dialogs Enter-to-submit without restyling the shell or duplicating the footer per dialog.
+- Sidebar item actions are inline `Pencil` / `Trash2` icon buttons revealed by `group-hover` / `group-focus-within`, not a dropdown menu. Two actions do not justify pulling in another primitive, and `opacity-0` (rather than conditional rendering) keeps them in the tab order so the keyboard path works while they are visually hidden.
+- Owner actions are gated on `project.role === "owner"` inside `ProjectListItem`, not on which tab is rendering. The tab split is presentation; the role is the fact, and it is the same field the API will return.
+- The mobile scrim is a `<button>`, not a `<div onClick>`. It needs to be dismissible by tap, and a button gets keyboard and screen-reader behavior for free instead of needing key handlers and an ARIA role bolted on.
+
 ## Session Notes
 
 - Stack baseline: Next.js 16.3.3 (Turbopack), React 19.2.8, Tailwind CSS v4.3.3 via `@tailwindcss/postcss`, TypeScript strict, `@/*` aliased to the project root.
@@ -108,4 +131,6 @@ Update this file whenever the current phase, active feature, or implementation s
 - `01-design-system` verification: `tsc --noEmit` clean; `next build` prerendered a scratch route rendering all six primitives; built CSS contains zero `oklch(1 0 0)` (white) values and no `.dark` override block; the six documented utilities emit the correct `var(--*)` references; `cn()` asserted against conflict-resolution, conditional, object, and array cases.
 - Auth brand panel verification: `tsc --noEmit` clean, `eslint .` reports 0 errors and 0 warnings, and `next build` compiles with `/sign-in` and `/sign-up` still server-rendered on demand and `�ƒ Proxy (Middleware)` intact. The rendered sign-in HTML carries the decorative `<canvas aria-hidden="true">` layer and no longer contains `lucide-ghost`.
 - The contour tracer was verified with a standalone harness rather than by eye, since a wrong marching-squares case table shows up only as visual garbage. Copying the field build and trace body verbatim into Node asserted: a lone bubble traces exactly one closed loop whose points sit on its nominal radius (39.98-40.14 for a radius of 40); bubbles inside the fusion distance collapse to a single loop spanning both; bubbles beyond it stay two; and a bubble spawned below the panel still closes inside the padded grid. Zero open chains in every case. The harness was throwaway and is not in the repo — rebuild it the same way (copy the field build and trace body into a Node script, swap `paint` for a collector) before changing `CELL`, `THRESHOLD`, `INFLUENCE`, or the case table.
+- `04-project-dialogs` verification: `tsc --noEmit` clean; `eslint .` reports 0 errors and 0 warnings; `next build` compiles and `/editor` still prerenders as static with `ƒ Proxy (Middleware)` intact. The prerendered `/editor` HTML carries the heading, the description, both `New Project` buttons (home + sidebar), the three owned projects with `Rename …` / `Delete …` labels, and no collaborator project — Radix `TabsContent` unmounts the inactive `Shared` tab, so those rows appear only once the tab is selected. `slugify` was checked against spaced, padded, accented, punctuation-heavy, underscored, all-separator, and single-character input.
+- The dialogs themselves were verified by build and static output, not in a browser — there is no test runner in the repo and `/editor` sits behind Clerk. Open-and-type behavior (live slug preview, rename autofocus, Enter submit) is worth one manual pass in the browser before the next unit builds on it.
 - The auth panel now says `Blueprint` while `app/layout.tsx` metadata, this repo, and every context file still say Ghost AI. That split is deliberate and unresolved: only the panel wordmark was asked for. If Blueprint is the real product name, the rename has to cover the `<title>`, `project-overview.md`, and the context docs together.
