@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  # A new push to the same branch makes the in-flight run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    env:
+      # `next build` imports lib/prisma.ts while collecting route config, which
+      # constructs a PrismaClient and throws if DATABASE_URL is unset. The pool
+      # is built but never connected to during a build, so a throwaway URL is
+      # enough and CI needs no database secret. Clerk needs no key here at all.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # postinstall runs `prisma generate`, which the typecheck and the build
+      # both need - app/generated/prisma is gitignored, so it does not exist
+      # until this step has run.
+      - run: npm ci
+
+      - run: npx eslint .
+
+      - run: npx tsc --noEmit
+
+      - run: npm run build
