@@ -1,0 +1,24 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # --ignore-scripts skips the postinstall prisma generate. ESLint does not
+      # need the generated client, and generating it in CI would drag a database
+      # connection into a job that has no business needing one.
+      - run: npm ci --ignore-scripts
+
+      - run: npm run lint
